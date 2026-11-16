@@ -66,14 +66,27 @@ function analyze(b,gap,N,dfc){
   return out;
 }
 function demoBuf(){
-  const sr=ctx().sampleRate,L=sr*40,b=AC.createBuffer(1,L,sr),d=b.getChannelData(0),sp=60/128;
-  for(let k=0;k<76;k++){const i=Math.floor(k*sp/2*sr);
+  const sr=ctx().sampleRate,L=sr*28,b=AC.createBuffer(1,L,sr),d=b.getChannelData(0),sp=60/128;
+  for(let k=0;k<112;k++){const i=Math.floor(k*sp/2*sr);
     if(k%2==0){let p=0;for(let j=0;j<.2*sr&&i+j<L;j++){const x=j/sr;p+=2*Math.PI*(45+90*Math.exp(-x*30))/sr;d[i+j]+=.8*Math.sin(p)*Math.exp(-x*12)}}
     if(k%4==2)for(let j=0;j<.15*sr&&i+j<L;j++)d[i+j]+=.5*(Math.random()*2-1)*Math.exp(-j/sr*25);
     if(k%2==1)for(let j=0;j<.04*sr&&i+j<L;j++)d[i+j]+=.25*(Math.random()*2-1)*Math.exp(-j/sr*90);
   }
+  const chart=[],T=(bt,f,ty,len)=>chart.push({b:bt,f,ty:ty||'t',len:len||0});
+  [0,.33,.67,1,.67,.33,0,.33].forEach((f,i)=>T(2+i,f));
+  T(10,0,'h',3);T(11,.67);T(12,.33);T(14,1,'h',3);T(15,.33);T(16,.67);
+  [.33,.67,.33,.67].forEach((f,i)=>T(18+i,f,'s'));T(22,0);T(23,1);T(24,0);T(25,1);
+  for(let i=0;i<4;i++){const q=30+i*4,o=i%2;T(q,o?1:0,'h',2);T(q+1,o?.67:.33,'s');T(q+2.5,.5);T(q+3,o?.33:.67)}
+  [.33,.67,.33,.67].forEach((f,i)=>T(46+i,f));T(50,0,'h',3);T(50,1,'h',3);T(54,.5);
+  const fr=[262,330,392,523];
+  chart.forEach(c=>{const i=Math.floor((c.b+2)*sp*sr),w=2*Math.PI*fr[Math.round(c.f*3)];
+    if(c.ty=='h'){const n=Math.floor(c.len*sp*sr);for(let j=0;j<n&&i+j<L;j++)d[i+j]+=.12*Math.sin(w*j/sr)*Math.min(1,j/800,(n-j)/3000)}
+    else if(c.ty=='s'){let p=0;for(let j=0;j<.25*sr&&i+j<L;j++){const x=j/sr;p+=w*(1+x*2)/sr;d[i+j]+=.15*Math.sin(p)*Math.exp(-x*8)}}
+    else for(let j=0;j<.12*sr&&i+j<L;j++)d[i+j]+=.12*Math.sin(2*w*j/sr)*Math.exp(-j/sr*30)});
+  b.chart=chart;
   return b;
 }
+const chartNotes=()=>buf.chart.map(c=>({t:(c.b+2)*60/128,l:Math.round(c.f*(N-1)),h:0,ty:c.ty,e:c.ty=='h'?(c.b+2+c.len)*60/128:0,s:0})).sort((a,b)=>a.t-b.t);
 function setSong(b,n){buf=b;name=n;$('nm').textContent=n+' · '+Math.round(b.duration)+'s';$('go').disabled=false}
 $('f').onchange=async e=>{const fl=e.target.files[0];if(!fl)return;$('nm').textContent='Decoding…';
   try{setSong(await ctx().decodeAudioData(await fl.arrayBuffer()),fl.name)}catch(x){$('nm').textContent='Could not read that file';$('go').disabled=true}};
@@ -90,7 +103,7 @@ $('cl').onclick=e=>{const a=e.target.dataset.a,i=e.target.dataset.i;if(!a)return
 $('chb').onclick=()=>{rc();$('chars').classList.remove('hide')};$('cc').onclick=()=>$('chars').classList.add('hide');
 const now=()=>AC.currentTime-t0-(AC.outputLatency||0)+offset/1000;
 function start(){
-  ctx();notes=analyze(buf,GAP[diff],N,diff);if(notes.length<5){$('nm').textContent='Not enough beats found in this track';return}
+  ctx();notes=buf.chart?chartNotes():analyze(buf,GAP[diff],N,diff);if(notes.length<5){$('nm').textContent='Not enough beats found in this track';return}
   st={score:0,combo:0,max:0,p:0,g:0,o:0,m:0};pops=[];hold=[];ptrs={};flash=Array(N).fill(0);
   src=AC.createBufferSource();src.buffer=buf;src.connect(AC.destination);t0=AC.currentTime+1;src.start(t0);src.onended=finish;
   state='play';$('menu').classList.add('hide');$('end').classList.add('hide');$('quit').style.display='block';cancelAnimationFrame(raf);loop();
